@@ -4,6 +4,7 @@ description: This post is related to the gatsbyjs
 date: '2018-12-2'
 image: ''
 tags: ['javascript','react','gatsby']
+thumbnail: "../../images/kitten-1.jpeg"
 ---
 
 ## Why do we use it?
