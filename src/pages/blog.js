@@ -1,4 +1,4 @@
-import { kebabCase } from "lodash"
+import { kebabCase, isNil } from "lodash"
 import React, { Component } from "react"
 import { graphql, Link } from "gatsby"
 import Layout from "../components/layout"
@@ -10,6 +10,8 @@ class BlogPage extends Component {
     itemsPerPage: 3,
     endPagination: 3,
     posts: [],
+    query: "",
+    type: "title",
   }
 
   constructor(props) {
@@ -19,17 +21,20 @@ class BlogPage extends Component {
       startPagination: 0,
       itemsPerPage: 3,
       endPagination: 3,
+      query: "",
+      type: "title",
     }
   }
 
+  // START: pagination-related functions
   currentPage = () => {
     return Math.ceil(this.state.startPagination / this.state.itemsPerPage + 1)
   }
 
-  totalPages = () => {
-    return this.state.posts.length <= this.state.itemsPerPage
+  totalPages = length => {
+    return length <= this.state.itemsPerPage
       ? 1
-      : Math.ceil(this.state.posts.length / this.state.itemsPerPage)
+      : Math.ceil(length / this.state.itemsPerPage)
   }
 
   previousPage = () => {
@@ -44,19 +49,19 @@ class BlogPage extends Component {
     this.setState({ startPagination, endPagination })
   }
 
-  nextPage = () => {
+  nextPage = length => {
     let startPagination = this.state.startPagination + this.state.itemsPerPage
     let endPagination = this.state.endPagination + this.state.itemsPerPage
 
-    if (endPagination >= this.state.posts.length) {
-      endPagination = this.state.posts.length
-      startPagination = this.state.posts.length - this.state.itemsPerPage
+    if (endPagination >= length) {
+      endPagination = length
+      startPagination = length - this.state.itemsPerPage
     }
 
     this.setState({ startPagination, endPagination })
   }
 
-  handleChange = e => {
+  handlePaginationChange = e => {
     this.setState({
       startPagination: 0,
       endPagination: parseInt(e.target.value),
@@ -64,47 +69,172 @@ class BlogPage extends Component {
     })
   }
 
+  goToPage = number => {
+    let startPagination = number * this.state.itemsPerPage
+    let endPagination = startPagination + this.state.itemsPerPage
+
+    this.setState({ startPagination, endPagination })
+  }
+  // END: pagination-related functions
+
+  // START: search functionality-related functions
+  updateQuery = query => {
+    this.setState({ query: query.trim() })
+  }
+
+  handleTypeChange = e => {
+    this.setState({
+      type: e.target.value,
+    })
+  }
+  // END: search functionality-related functions
+
   render() {
-    let paginatedPosts = this.state.posts.slice(
+    // list of posts that may be filtered;
+    let filteredPosts = this.state.posts
+
+    if (this.state.query) {
+      let query = this.state.query.toLowerCase()
+      filteredPosts = this.state.posts.filter(post => {
+        switch (this.state.type) {
+          case "title": {
+            return post.node.frontmatter.title.toLowerCase().includes(query)
+          }
+          case "tag": {
+            if (
+              !isNil(post.node.frontmatter.tags) &&
+              post.node.frontmatter.tags.length > 0
+            ) {
+              const hasTag = post.node.frontmatter.tags.filter(tag =>
+                tag.toLowerCase().includes(query)
+              )
+
+              return hasTag.length > 0
+            } else {
+              return false
+            }
+          }
+          case "body": {
+            return post.node.excerpt.toLowerCase().includes(query)
+          }
+          default: {
+            return false
+          }
+        }
+      })
+    }
+
+    const postsSize = this.state.posts.length
+    const filteredPostsSize = filteredPosts.length
+
+    let currentPage = this.currentPage()
+    let totalPages = this.totalPages(filteredPostsSize)
+
+    // list of paginated posts based on filteredPosts
+    let paginatedPosts = filteredPosts.slice(
       this.state.startPagination,
       this.state.endPagination
     )
 
-    let currentPage = this.currentPage()
-    let totalPages = this.totalPages()
+    let buttonsNumber = []
+    for (let i = 0; i < totalPages; i++) {
+      buttonsNumber.push(i)
+    }
 
     return (
       <Layout>
-        <div className="post-pagination">
-          <div className="post-pagination__buttons">
-            <div>
-              Current Page: {currentPage} / Total Pages: {totalPages}
-            </div>
-            <button
-              disabled={currentPage === 1}
-              onClick={() => this.previousPage()}
+        <div className="post-options">
+          <div className="post-filtering">
+            Filter by:{" "}
+            <select
+              id="filterType"
+              onChange={this.handleTypeChange.bind(this)}
+              value={this.state.type}
             >
-              Previous Page
-            </button>
-            <button
-              disabled={currentPage === totalPages}
-              onClick={() => this.nextPage()}
-            >
-              Next Page
-            </button>
+              <option value="title">Title</option>
+              <option value="tag">Tags</option>
+              <option value="body">Body</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Search for posts 🔎"
+              value={this.state.query}
+              onChange={event => this.updateQuery(event.target.value)}
+            />
           </div>
-
           <div className="post-pagination__select">
-            Change pagination:
+            Nº of posts:{" "}
             <select
               id="pageNum"
-              onChange={this.handleChange.bind(this)}
+              onChange={this.handlePaginationChange.bind(this)}
               value={this.state.itemsPerPage}
             >
               <option value="3">3</option>
               <option value="5">5</option>
               <option value="10">10</option>
             </select>
+          </div>
+        </div>
+        <div className="post-pagination">
+          {isNil(this.state.query) ||
+            (this.state.query === "" && (
+              <span>
+                Showing a total of <strong>{postsSize}</strong> posts
+              </span>
+            ))}
+          {!isNil(this.state.query) && this.state.query !== "" && (
+            <span>
+              Showing <strong>{filteredPostsSize}</strong> from a total of{" "}
+              <strong>{postsSize}</strong> posts
+            </span>
+          )}
+          <div className="post-pagination__buttons">
+            <div>
+              Current Page: {currentPage} / Total Pages: {totalPages}
+            </div>
+            <button
+              title="Go to first page"
+              disabled={currentPage === 1}
+              onClick={() => this.goToPage(0)}
+            >
+              First
+            </button>
+            <button
+              title="Go to previous page"
+              disabled={currentPage === 1}
+              onClick={() => this.previousPage()}
+            >
+              Previous
+            </button>
+            {buttonsNumber.length > 1 && (
+              <span>
+                {buttonsNumber.map(button => (
+                  <button
+                    title={"Go to page " + (button + 1)}
+                    key={button}
+                    disabled={currentPage === button + 1}
+                    onClick={() => this.goToPage(button)}
+                  >
+                    {button + 1}
+                  </button>
+                ))}
+              </span>
+            )}
+
+            <button
+              title="Go to next page"
+              disabled={currentPage === totalPages}
+              onClick={() => this.nextPage(filteredPostsSize)}
+            >
+              Next
+            </button>
+            <button
+              title="Go to last page"
+              disabled={currentPage === totalPages}
+              onClick={() => this.goToPage(totalPages - 1)}
+            >
+              Last
+            </button>
           </div>
         </div>
         <div className="post-list">
